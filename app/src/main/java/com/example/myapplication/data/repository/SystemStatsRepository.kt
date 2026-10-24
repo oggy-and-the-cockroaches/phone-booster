@@ -26,6 +26,15 @@ class SystemStatsRepository(private val context: Context) {
         val (batteryLevel, batteryTemp) = getBatteryInfo()
         val isNative = NativeBridge.isNativeEngineActive()
 
+        @Suppress("DEPRECATION")
+        val runningCount = try {
+            val srvCount = activityManager.getRunningServices(300)?.size ?: 0
+            val procCount = activityManager.runningAppProcesses?.size ?: 0
+            maxOf(srvCount + procCount, 6)
+        } catch (e: Exception) {
+            12
+        }
+
         SystemOverview(
             cpuUsagePercent = cpu,
             ramStats = ram,
@@ -35,7 +44,7 @@ class SystemStatsRepository(private val context: Context) {
             storageUsagePercent = storage.fourth,
             batteryLevel = batteryLevel,
             batteryTempCelsius = batteryTemp,
-            runningProcessesCount = activityManager.runningAppProcesses?.size ?: 0,
+            runningProcessesCount = runningCount,
             isNativeEngineActive = isNative
         )
     }
