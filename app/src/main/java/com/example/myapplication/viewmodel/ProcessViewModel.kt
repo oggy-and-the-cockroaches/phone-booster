@@ -1,10 +1,13 @@
 package com.example.myapplication.viewmodel
 
 import android.app.Application
+import android.content.Context
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.myapplication.data.models.ProcessInfo
 import com.example.myapplication.data.repository.ProcessRepository
+import com.example.myapplication.service.BoostAccessibilityService
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -25,7 +28,8 @@ data class ProcessUiState(
     val filter: ProcessFilter = ProcessFilter.ALL,
     val sort: ProcessSort = ProcessSort.MEMORY_DESC,
     val searchQuery: String = "",
-    val actionMessage: String? = null
+    val actionMessage: String? = null,
+    val isAccessibilityEnabled: Boolean = false
 )
 
 class ProcessViewModel(application: Application) : AndroidViewModel(application) {
@@ -47,7 +51,8 @@ class ProcessViewModel(application: Application) : AndroidViewModel(application)
             _uiState.value = _uiState.value.copy(
                 isLoading = false,
                 processes = list,
-                filteredProcesses = filtered
+                filteredProcesses = filtered,
+                isAccessibilityEnabled = BoostAccessibilityService.isServiceRunning
             )
         }
     }
@@ -80,30 +85,73 @@ class ProcessViewModel(application: Application) : AndroidViewModel(application)
                 _uiState.value = _uiState.value.copy(actionMessage = "Cannot terminate BoostMax app!")
                 return@launch
             }
+
+            val label = process.appLabel ?: process.name
             repository.killProcess(process.pid, process.packageName)
-            val updated = _uiState.value.processes.filter { it.pid != process.pid }
+
+            if (!BoostAccessibilityService.isServiceRunning) {
+                delay(400)
+                if (!repository.isPackageRunning(process.packageName)) {
+                    _uiState.value = _uiState.value.copy(actionMessage = "✓ $label stopped successfully!")
+                } else {
+                    BoostAccessibilityService.openAppDetails(getApplication(), process.packageName)
+                    _uiState.value = _uiState.value.copy(
+                        actionMessage = "OriginOS protected $label. Tap 'Force Stop' in settings to finish."
+                    )
+                }
+            } else {
+                _uiState.value = _uiState.value.copy(
+                    actionMessage = "⚡ Automated Force-Stop executing for $label..."
+                )
+            }
+
+            delay(1200)
+            val updated = repository.getRunningProcesses()
+            val isStillAlive = repository.isPackageRunning(process.packageName)
+            val finalMsg = if (!isStillAlive) "✓ $label stopped!" else _uiState.value.actionMessage
             _uiState.value = _uiState.value.copy(
                 processes = updated,
                 filteredProcesses = applyFilterAndSort(updated, _uiState.value.filter, _uiState.value.sort, _uiState.value.searchQuery),
-                actionMessage = "Process stopped: ${process.appLabel ?: process.name}"
+                actionMessage = finalMsg
             )
         }
     }
 
     fun killAllUserProcesses() {
         viewModelScope.launch {
-            _uiState.value = _uiState.value.copy(isLoading = true)
             val myPackage = getApplication<Application>().packageName
-            var killedCount = 0
-            for (p in _uiState.value.processes) {
-                if (p.isUserApp && p.packageName != myPackage) {
-                    repository.killProcess(p.pid, p.packageName)
-                    killedCount++
-                }
+            val targetPackages = _uiState.value.processes
+                .filter { it.isUserApp && it.packageName != myPackage }
+                .map { it.packageName }
+
+            if (targetPackages.isEmpty()) {
+                _uiState.value = _uiState.value.copy(actionMessage = "No user background processes to stop.")
+                return@launch
             }
-            loadProcesses()
+
+            if (BoostAccessibilityService.isServiceRunning) {
+                _uiState.value = _uiState.value.copy(actionMessage = "⚡ Automated Force-Stop running for ${targetPackages.size} apps...")
+                BoostAccessibilityService.stopPackages(getApplication(), targetPackages)
+            } else {
+                for (pkg in targetPackages) {
+                    repository.killProcess(0, pkg)
+                }
+                targetPackages.firstOrNull()?.let {
+                    BoostAccessibilityService.openAppDetails(getApplication(), it)
+                }
+                _uiState.value = _uiState.value.copy(
+                    actionMessage = "Background halted. Enable 'Automated Killer' in Accessibility for 1-tap Force Stop."
+                )
+            }
+
+            delay(2000)
+            val updated = repository.getRunningProcesses()
+            val remainingUserApps = updated.count { it.isUserApp && it.packageName != myPackage }
+            val stoppedCount = targetPackages.size - remainingUserApps
             _uiState.value = _uiState.value.copy(
-                actionMessage = "Stopped $killedCount background processes!"
+                processes = updated,
+                filteredProcesses = applyFilterAndSort(updated, _uiState.value.filter, _uiState.value.sort, _uiState.value.searchQuery),
+                actionMessage = if (stoppedCount > 0) "✓ Stopped $stoppedCount apps ($remainingUserApps protected by OriginOS)" else _uiState.value.actionMessage
             )
         }
     }

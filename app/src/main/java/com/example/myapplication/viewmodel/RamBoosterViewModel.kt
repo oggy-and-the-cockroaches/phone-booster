@@ -54,31 +54,40 @@ class RamBoosterViewModel(application: Application) : AndroidViewModel(applicati
             _uiState.value = _uiState.value.copy(isBoosting = true, boostFreedBytes = null)
             val beforeUsed = _uiState.value.ramStats.usedBytes
 
-            var killedCount = 0
-            var freedEstimated = 0L
             val myPackage = getApplication<Application>().packageName
+            val candidateApps = _uiState.value.topApps.filter { it.packageName != myPackage }
 
-            for (app in _uiState.value.topApps) {
-                if (app.packageName != myPackage) {
+            if (com.example.myapplication.service.BoostAccessibilityService.isServiceRunning) {
+                val pkgs = candidateApps.map { it.packageName }
+                com.example.myapplication.service.BoostAccessibilityService.stopPackages(getApplication(), pkgs)
+            } else {
+                for (app in candidateApps) {
                     processRepo.killProcess(app.pid, app.packageName)
-                    killedCount++
-                    freedEstimated += app.memoryBytes
                 }
             }
 
-            delay(1500) // Engaging boost sequence
+            delay(1500)
+
+            val updatedRunning = processRepo.getRunningProcesses()
+            val runningPkgs = updatedRunning.map { it.packageName }.toSet()
+
+            var actuallyKilledCount = 0
+            for (app in candidateApps) {
+                if (!runningPkgs.contains(app.packageName)) {
+                    actuallyKilledCount++
+                }
+            }
 
             val newRam = statsRepo.getRamStats()
-            val actualFreed = (beforeUsed - newRam.usedBytes).coerceAtLeast(freedEstimated.coerceAtLeast(180_000_000L))
-
-            val updatedApps = processRepo.getRunningProcesses().filter { it.isUserApp }.take(10)
+            val realFreed = (beforeUsed - newRam.usedBytes).coerceAtLeast(0L)
+            val updatedUserApps = updatedRunning.filter { it.isUserApp }.take(10)
 
             _uiState.value = _uiState.value.copy(
                 isBoosting = false,
                 ramStats = newRam,
-                topApps = updatedApps,
-                boostFreedBytes = actualFreed,
-                killedAppsCount = killedCount
+                topApps = if (updatedUserApps.isNotEmpty()) updatedUserApps else updatedRunning.take(10),
+                boostFreedBytes = realFreed,
+                killedAppsCount = actuallyKilledCount
             )
         }
     }

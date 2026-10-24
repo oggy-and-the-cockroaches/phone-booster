@@ -177,22 +177,103 @@ class ProcessRepository(private val context: Context) {
         }
     }
 
+    fun isPackageRunning(packageName: String): Boolean {
+        try {
+            val method = activityManager.javaClass.getMethod("getPackageImportance", String::class.java)
+            val importance = method.invoke(activityManager, packageName) as? Int
+            if (importance != null && importance != 1000 /* IMPORTANCE_GONE */) {
+                return true
+            }
+        } catch (e: Exception) {
+            // Fallback to procs and services checks
+        }
+
+        val procs = activityManager.runningAppProcesses ?: emptyList()
+        for (p in procs) {
+            if (p.pkgList?.contains(packageName) == true || p.processName == packageName) {
+                return true
+            }
+        }
+
+        @Suppress("DEPRECATION")
+        val services = activityManager.getRunningServices(50) ?: emptyList()
+        for (s in services) {
+            if (s.service.packageName == packageName) {
+                return true
+            }
+        }
+
+        return false
+    }
+
     suspend fun killProcess(pid: Int, packageName: String): Boolean = withContext(Dispatchers.IO) {
         var killed = false
 
-        // 1. Try Native C++ kill
-        if (NativeBridge.killProcessNativeSafe(pid)) {
-            killed = true
+        // 1. Try system forceStopPackage reflection on ActivityManager
+        try {
+            val amClass = activityManager.javaClass
+            // Try single param: forceStopPackage(String)
+            try {
+                val method = amClass.getMethod("forceStopPackage", String::class.java)
+                method.isAccessible = true
+                method.invoke(activityManager, packageName)
+                android.util.Log.d("ProcessRepo", "am.forceStopPackage($packageName) invoked successfully")
+                killed = true
+            } catch (e: NoSuchMethodException) {
+                // Try two params: forceStopPackageAsUser(String, int)
+                val methodUser = amClass.getMethod("forceStopPackageAsUser", String::class.java, Int::class.javaPrimitiveType)
+                methodUser.isAccessible = true
+                methodUser.invoke(activityManager, packageName, 0)
+                android.util.Log.d("ProcessRepo", "am.forceStopPackageAsUser($packageName, 0) invoked successfully")
+                killed = true
+            }
+        } catch (e: Throwable) {
+            android.util.Log.d("ProcessRepo", "am forceStop reflection failed: ${e.message}")
         }
 
-        // 2. Kill background processes via Android ActivityManager
+        // 2. Try IActivityManager binder directly (ServiceManager)
+        if (!killed) {
+            try {
+                val smClass = Class.forName("android.os.ServiceManager")
+                val getService = smClass.getMethod("getService", String::class.java)
+                val binder = getService.invoke(null, "activity")
+                val iamClass = Class.forName("android.app.IActivityManager\$Stub")
+                val asInterface = iamClass.getMethod("asInterface", android.os.IBinder::class.java)
+                val iam = asInterface.invoke(null, binder)
+                val fsMethod = iam.javaClass.getMethod("forceStopPackage", String::class.java, Int::class.javaPrimitiveType)
+                fsMethod.isAccessible = true
+                fsMethod.invoke(iam, packageName, 0)
+                android.util.Log.d("ProcessRepo", "iam.forceStopPackage($packageName, 0) invoked successfully")
+                killed = true
+            } catch (e: Throwable) {
+                android.util.Log.d("ProcessRepo", "iam forceStop binder failed: ${e.message}")
+            }
+        }
+
+        // 3. Try Native C++ kill if PID is valid
+        if (pid > 0) {
+            if (NativeBridge.killProcessNativeSafe(pid)) {
+                killed = true
+            }
+        }
+
+        // 4. Background kill via standard API
         try {
             activityManager.killBackgroundProcesses(packageName)
-            killed = true
         } catch (e: Exception) {
             // Ignore
+        }
+
+        // 5. Automated UI force-stop if Accessibility Service is active and app is still running
+        if (!killed || isPackageRunning(packageName)) {
+            if (com.example.myapplication.service.BoostAccessibilityService.isServiceRunning) {
+                android.util.Log.d("ProcessRepo", "Triggering BoostAccessibilityService for $packageName")
+                com.example.myapplication.service.BoostAccessibilityService.stopPackage(context, packageName)
+                killed = true
+            }
         }
 
         killed
     }
 }
+

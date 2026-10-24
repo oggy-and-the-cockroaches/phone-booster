@@ -1,3 +1,4 @@
 <resources>
     <string name="app_name">BoostMax</string>
+    <string name="accessibility_service_desc">Enables BoostMax to automate force-stopping background apps to genuinely free RAM and improve battery life on OriginOS.</string>
 </resources>

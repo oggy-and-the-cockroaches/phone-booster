@@ -52,12 +52,16 @@ import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import android.content.Intent
+import android.provider.Settings
+import androidx.compose.ui.platform.LocalContext
 import com.example.myapplication.ui.components.ProcessItemView
 import com.example.myapplication.ui.theme.CoralRed
 import com.example.myapplication.ui.theme.CyanAccent
 import com.example.myapplication.ui.theme.DarkBackground
 import com.example.myapplication.ui.theme.DarkSurfaceBorder
 import com.example.myapplication.ui.theme.DarkSurfaceElevated
+import com.example.myapplication.ui.theme.ElectricBlue
 import com.example.myapplication.ui.theme.TextMuted
 import com.example.myapplication.ui.theme.TextPrimary
 import com.example.myapplication.ui.theme.TextSecondary
@@ -184,8 +188,10 @@ fun ProcessManagerScreen(
                         text = state.actionMessage ?: "",
                         color = CyanAccent,
                         fontSize = 12.sp,
-                        fontWeight = FontWeight.SemiBold
+                        fontWeight = FontWeight.SemiBold,
+                        modifier = Modifier.weight(1f)
                     )
+                    Spacer(modifier = Modifier.width(6.dp))
                     Icon(
                         imageVector = Icons.Default.Close,
                         contentDescription = "Dismiss",
@@ -194,6 +200,53 @@ fun ProcessManagerScreen(
                             .size(16.dp)
                             .clickable { viewModel.clearActionMessage() }
                     )
+                }
+            }
+        }
+
+        // Accessibility Automation Banner (Real Process Killer)
+        val context = LocalContext.current
+        if (!state.isAccessibilityEnabled) {
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp, vertical = 6.dp)
+                    .clip(RoundedCornerShape(12.dp))
+                    .background(
+                        androidx.compose.ui.graphics.Brush.horizontalGradient(
+                            listOf(ElectricBlue.copy(alpha = 0.25f), CyanAccent.copy(alpha = 0.15f))
+                        )
+                    )
+                    .padding(12.dp)
+            ) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            text = "⚡ Automated Force-Stop Killer",
+                            color = TextPrimary,
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 12.sp
+                        )
+                        Text(
+                            text = "OriginOS protects running apps. Enable 'BoostMax Automated Killer' in Accessibility for 1-tap Force Stop.",
+                            color = TextSecondary,
+                            fontSize = 11.sp
+                        )
+                    }
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Button(
+                        onClick = {
+                            val intent = Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS).apply {
+                                flags = Intent.FLAG_ACTIVITY_NEW_TASK
+                            }
+                            context.startActivity(intent)
+                        },
+                        colors = ButtonDefaults.buttonColors(containerColor = CyanAccent),
+                        shape = RoundedCornerShape(8.dp),
+                        contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp)
+                    ) {
+                        Text("Enable", color = DarkBackground, fontWeight = FontWeight.Bold, fontSize = 11.sp)
+                    }
                 }
             }
         }
