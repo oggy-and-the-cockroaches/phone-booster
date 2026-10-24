@@ -149,7 +149,12 @@ class StorageRepository(private val context: Context) {
         val result = mutableListOf<AppStorageItem>()
 
         val apps = try {
-            packageManager.getInstalledApplications(PackageManager.GET_META_DATA)
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                packageManager.getInstalledApplications(PackageManager.ApplicationInfoFlags.of(0))
+            } else {
+                @Suppress("DEPRECATION")
+                packageManager.getInstalledApplications(PackageManager.GET_META_DATA)
+            }
         } catch (e: Exception) {
             emptyList()
         }

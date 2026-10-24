@@ -38,7 +38,9 @@ class RamBoosterViewModel(application: Application) : AndroidViewModel(applicati
         viewModelScope.launch {
             _uiState.value = _uiState.value.copy(isLoading = true)
             val ram = statsRepo.getRamStats()
-            val procs = processRepo.getRunningProcesses().filter { it.isUserApp }.take(10)
+            val allProcs = processRepo.getRunningProcesses()
+            val userProcs = allProcs.filter { it.isUserApp }
+            val procs = if (userProcs.size >= 5) userProcs.take(20) else allProcs.take(20)
             _uiState.value = _uiState.value.copy(
                 isLoading = false,
                 ramStats = ram,

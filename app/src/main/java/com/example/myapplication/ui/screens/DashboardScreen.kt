@@ -27,6 +27,9 @@ import androidx.compose.material.icons.filled.Memory
 import androidx.compose.material.icons.filled.RocketLaunch
 import androidx.compose.material.icons.filled.Speed
 import androidx.compose.material.icons.filled.Storage
+import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Icon
@@ -34,6 +37,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -127,6 +131,53 @@ fun DashboardScreen(
                         fontWeight = FontWeight.Bold,
                         fontFamily = FontFamily.Monospace
                     )
+                }
+            }
+        }
+
+        val context = androidx.compose.ui.platform.LocalContext.current
+        var hasUsagePermission by androidx.compose.runtime.remember {
+            androidx.compose.runtime.mutableStateOf(com.example.myapplication.util.PermissionHelper.hasUsageStatsPermission(context))
+        }
+
+        if (!hasUsagePermission) {
+            Spacer(modifier = Modifier.height(14.dp))
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(14.dp))
+                    .background(
+                        androidx.compose.ui.graphics.Brush.horizontalGradient(
+                            listOf(ElectricBlue.copy(alpha = 0.25f), CyanAccent.copy(alpha = 0.15f))
+                        )
+                    )
+                    .padding(14.dp)
+            ) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            text = "OriginOS 6 Deep Optimization",
+                            color = TextPrimary,
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 13.sp
+                        )
+                        Text(
+                            text = "Grant Usage Access to view all active background apps & cache on your iQOO device.",
+                            color = TextSecondary,
+                            fontSize = 11.sp
+                        )
+                    }
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Button(
+                        onClick = {
+                            com.example.myapplication.util.PermissionHelper.openUsageStatsSettings(context)
+                        },
+                        colors = ButtonDefaults.buttonColors(containerColor = CyanAccent),
+                        shape = RoundedCornerShape(8.dp),
+                        contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp)
+                    ) {
+                        Text("Grant", color = DarkBackground, fontWeight = FontWeight.Bold, fontSize = 11.sp)
+                    }
                 }
             }
         }
