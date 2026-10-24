@@ -211,7 +211,7 @@ fun RamBoosterScreen(
                 contentPadding = PaddingValues(horizontal = 16.dp, vertical = 6.dp),
                 verticalArrangement = Arrangement.spacedBy(8.dp)
             ) {
-                items(state.topApps, key = { it.pid }) { app ->
+                items(state.topApps, key = { "${it.packageName}_${it.pid}" }) { app ->
                     RamAppItem(app = app)
                 }
             }

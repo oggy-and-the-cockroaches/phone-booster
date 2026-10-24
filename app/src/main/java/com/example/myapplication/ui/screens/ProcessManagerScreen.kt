@@ -334,7 +334,7 @@ fun ProcessManagerScreen(
                 contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp),
                 verticalArrangement = Arrangement.spacedBy(8.dp)
             ) {
-                items(state.filteredProcesses, key = { it.pid }) { process ->
+                items(state.filteredProcesses, key = { "${it.packageName}_${it.pid}" }) { process ->
                     ProcessItemView(
                         process = process,
                         onKillClick = { viewModel.killProcess(it) }

@@ -102,6 +102,7 @@ class ProcessRepository(private val context: Context) {
         // 4. Query all installed packages
         val allApps = getAllInstalledApps()
 
+        var autoPid = 12000
         for (app in allApps) {
             val pkg = app.packageName
             val isUser = (app.flags and ApplicationInfo.FLAG_SYSTEM) == 0
@@ -114,7 +115,7 @@ class ProcessRepository(private val context: Context) {
 
             // Estimate memory based on app characteristics
             val usageStat = recentUsageMap[pkg]
-            val pid = runningMap[app.processName]?.pid ?: (10000 + (app.uid % 10000))
+            val pid = runningMap[app.processName]?.pid ?: (autoPid++)
 
             // Realistic memory estimation based on app type
             val memBytes = when {

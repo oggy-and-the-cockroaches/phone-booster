@@ -218,7 +218,7 @@ fun CacheCleanerScreen(
                 contentPadding = PaddingValues(horizontal = 16.dp, vertical = 6.dp),
                 verticalArrangement = Arrangement.spacedBy(8.dp)
             ) {
-                items(overview.items, key = { it.path }) { item ->
+                items(overview.items, key = { "${it.path}_${it.name}" }) { item ->
                     val isChecked = state.selectedItemPaths.contains(item.path)
                     JunkItemCard(
                         item = item,
